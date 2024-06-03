@@ -22,6 +22,7 @@ from transformers.onnx import OnnxConfig
 from transformers.utils import logging
 
 from lora.lora_config_parser import parse_lora_config
+from projectors.shortcut_config_parser import parse_shortcut_config
 
 logger = logging.get_logger(__name__)
 
@@ -35,7 +36,7 @@ ROBERTA_PRETRAINED_CONFIG_ARCHIVE_MAP = {
 }
 
 
-class RobertaLoraConfig(PretrainedConfig):
+class RobertaLoraAgsConfig(PretrainedConfig):
     r"""
     This is the configuration class to store the configuration of a [`RobertaModel`] or a [`TFRobertaModel`]. It is
     used to instantiate a RoBERTa model according to the specified arguments, defining the model architecture.
@@ -125,6 +126,7 @@ class RobertaLoraConfig(PretrainedConfig):
         use_cache=True,
         classifier_dropout=None,
         lora_config: dict = None,
+        shortcut_config: dict = None,
         **kwargs,
     ):
         super().__init__(
@@ -154,13 +156,20 @@ class RobertaLoraConfig(PretrainedConfig):
                 lora_config, num_hidden_layers, num_attention_heads
             )
         self.lora_config = lora_config
-
+        if shortcut_config is not None:
+            shortcut_config = parse_shortcut_config(shortcut_config, num_hidden_layers)
+        self.shortcut_config = shortcut_config
     def __setattr__(self, key, value):
         if key == "lora_config" and value is not None:
             value = parse_lora_config(
                 config=value,
                 num_hidden_layers=self.num_hidden_layers,
                 num_heads=self.num_attention_heads,
+            )
+        elif key == "shortcut_config" and value is not None:
+            value = parse_shortcut_config(
+                config=value,
+                num_hidden_layers=self.num_hidden_layers,
             )
         return super().__setattr__(key, value)
 

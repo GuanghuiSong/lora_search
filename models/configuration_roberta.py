@@ -17,30 +17,23 @@
 from collections import OrderedDict
 from typing import Mapping
 
-from transformers.configuration_utils import PretrainedConfig
-from transformers.onnx import OnnxConfig
-from transformers.utils import logging
+from ...configuration_utils import PretrainedConfig
+from ...onnx import OnnxConfig
+from ...utils import logging
 
-from lora.lora_config_parser import parse_lora_config
 
 logger = logging.get_logger(__name__)
 
-ROBERTA_PRETRAINED_CONFIG_ARCHIVE_MAP = {
-    "roberta-base": "https://huggingface.co/roberta-base/resolve/main/config.json",
-    "roberta-large": "https://huggingface.co/roberta-large/resolve/main/config.json",
-    "roberta-large-mnli": "https://huggingface.co/roberta-large-mnli/resolve/main/config.json",
-    "distilroberta-base": "https://huggingface.co/distilroberta-base/resolve/main/config.json",
-    "roberta-base-openai-detector": "https://huggingface.co/roberta-base-openai-detector/resolve/main/config.json",
-    "roberta-large-openai-detector": "https://huggingface.co/roberta-large-openai-detector/resolve/main/config.json",
-}
+
+from ..deprecated._archive_maps import ROBERTA_PRETRAINED_CONFIG_ARCHIVE_MAP  # noqa: F401, E402
 
 
-class RobertaLoraConfig(PretrainedConfig):
+class RobertaConfig(PretrainedConfig):
     r"""
     This is the configuration class to store the configuration of a [`RobertaModel`] or a [`TFRobertaModel`]. It is
     used to instantiate a RoBERTa model according to the specified arguments, defining the model architecture.
     Instantiating a configuration with the defaults will yield a similar configuration to that of the RoBERTa
-    [roberta-base](https://huggingface.co/roberta-base) architecture.
+    [FacebookAI/roberta-base](https://huggingface.co/FacebookAI/roberta-base) architecture.
 
     Configuration objects inherit from [`PretrainedConfig`] and can be used to control the model outputs. Read the
     documentation from [`PretrainedConfig`] for more information.
@@ -102,6 +95,7 @@ class RobertaLoraConfig(PretrainedConfig):
     >>> # Accessing the model configuration
     >>> configuration = model.config
     ```"""
+
     model_type = "roberta"
 
     def __init__(
@@ -124,15 +118,9 @@ class RobertaLoraConfig(PretrainedConfig):
         position_embedding_type="absolute",
         use_cache=True,
         classifier_dropout=None,
-        lora_config: dict = None,
         **kwargs,
     ):
-        super().__init__(
-            pad_token_id=pad_token_id,
-            bos_token_id=bos_token_id,
-            eos_token_id=eos_token_id,
-            **kwargs,
-        )
+        super().__init__(pad_token_id=pad_token_id, bos_token_id=bos_token_id, eos_token_id=eos_token_id, **kwargs)
 
         self.vocab_size = vocab_size
         self.hidden_size = hidden_size
@@ -149,23 +137,9 @@ class RobertaLoraConfig(PretrainedConfig):
         self.position_embedding_type = position_embedding_type
         self.use_cache = use_cache
         self.classifier_dropout = classifier_dropout
-        if lora_config is not None:
-            lora_config = parse_lora_config(
-                lora_config, num_hidden_layers, num_attention_heads
-            )
-        self.lora_config = lora_config
-
-    def __setattr__(self, key, value):
-        if key == "lora_config" and value is not None:
-            value = parse_lora_config(
-                config=value,
-                num_hidden_layers=self.num_hidden_layers,
-                num_heads=self.num_attention_heads,
-            )
-        return super().__setattr__(key, value)
 
 
-class RobertaLoraOnnxConfig(OnnxConfig):
+class RobertaOnnxConfig(OnnxConfig):
     @property
     def inputs(self) -> Mapping[str, Mapping[int, str]]:
         if self.task == "multiple-choice":
@@ -178,4 +152,3 @@ class RobertaLoraOnnxConfig(OnnxConfig):
                 ("attention_mask", dynamic_axis),
             ]
         )
-

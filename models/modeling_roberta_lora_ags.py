@@ -49,13 +49,14 @@ from transformers.utils import (
 )
 
 from lora.lora_modules import LoraLinear
-from .configuration_roberta_lora import RobertaLoraConfig
+from projectors.shortcut_modules import ShortcutFromIdentity, ShortcutFromZeros
+from .configuration_roberta_lora_ags import RobertaLoraAgsConfig
 
 
 logger = logging.get_logger(__name__)
 
 _CHECKPOINT_FOR_DOC = "roberta-base"
-_CONFIG_FOR_DOC = "RobertaConfig"
+_CONFIG_FOR_DOC = "RobertaAgsConfig"
 
 ROBERTA_PRETRAINED_MODEL_ARCHIVE_LIST = [
     "roberta-base",
@@ -381,18 +382,15 @@ class RobertaLoraSelfOutput(nn.Module):
             out_features=config.hidden_size,
             config=layer_lora_config["o_proj"],
         )
-        self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
-        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+
 
     def forward(
         self, hidden_states: torch.Tensor, input_tensor: torch.Tensor
     ) -> torch.Tensor:
         hidden_states = self.dense(hidden_states)
-        hidden_states = self.dropout(hidden_states)
-        hidden_states = self.LayerNorm(hidden_states + input_tensor)
         return hidden_states
 
-
+#res1 in here ###attn's residual
 # Copied from transformers.models.bert.modeling_bert.BertAttention with Bert->Roberta
 class RobertaLoraAttention(nn.Module):
     def __init__(self, config, layer_id: int = 0, position_embedding_type=None):
@@ -401,6 +399,15 @@ class RobertaLoraAttention(nn.Module):
             config, layer_id=layer_id, position_embedding_type=position_embedding_type
         )
         self.output = RobertaLoraSelfOutput(config, layer_id=layer_id)
+        self.self_attn_layer_norm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.self_attn_dropout = nn.Dropout(config.hidden_dropout_prob)
+        layer_shortcut_config = config.shortcut_config[f"model_layer_{layer_id}"]
+        self.embed_dim = config.hidden_size
+
+        self.residual_1 = ShortcutFromIdentity(
+            in_out_features=self.embed_dim,
+            config=layer_shortcut_config["residual1"],
+        )
         self.pruned_heads = set()
 
     def prune_heads(self, heads):
@@ -436,6 +443,7 @@ class RobertaLoraAttention(nn.Module):
         past_key_value: Optional[Tuple[Tuple[torch.FloatTensor]]] = None,
         output_attentions: Optional[bool] = False,
     ) -> Tuple[torch.Tensor]:
+        residual = self.residual_1(hidden_states)
         self_outputs = self.self(
             hidden_states,
             attention_mask,
@@ -446,6 +454,9 @@ class RobertaLoraAttention(nn.Module):
             output_attentions,
         )
         attention_output = self.output(self_outputs[0], hidden_states)
+
+        attention_output = self.self_attn_dropout(attention_output)
+        attention_output = self.self_attn_layer_norm(attention_output + residual)
         outputs = (attention_output,) + self_outputs[
             1:
         ]  # add attentions if we output them
@@ -485,20 +496,17 @@ class RobertaLoraOutput(nn.Module):
             out_features=config.hidden_size,
             config=layer_lora_config["w2"],
         )
-        self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
-        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+
 
     def forward(
         self, hidden_states: torch.Tensor, input_tensor: torch.Tensor
     ) -> torch.Tensor:
         hidden_states = self.dense(hidden_states)
-        hidden_states = self.dropout(hidden_states)
-        hidden_states = self.LayerNorm(hidden_states + input_tensor)
         return hidden_states
 
-
+#res2,shortcut_sa,shortcut_ffn in here ###ffn's residual
 # Copied from transformers.models.bert.modeling_bert.BertLayer with Bert->Roberta
-class RobertaLoraLayer(nn.Module):
+class RobertaLoraAgsLayer(nn.Module):
     def __init__(self, config, layer_id: int = 0):
         super().__init__()
         self.chunk_size_feed_forward = config.chunk_size_feed_forward
@@ -506,6 +514,8 @@ class RobertaLoraLayer(nn.Module):
         self.attention = RobertaLoraAttention(config, layer_id=layer_id)
         self.is_decoder = config.is_decoder
         self.add_cross_attention = config.add_cross_attention
+        self.embed_dim = config.hidden_size
+        self.layer_id = layer_id
         if self.add_cross_attention:
             if not self.is_decoder:
                 raise ValueError(
@@ -516,7 +526,37 @@ class RobertaLoraLayer(nn.Module):
             )
         self.intermediate = RobertaLoraIntermediate(config, layer_id=layer_id)
         self.output = RobertaLoraOutput(config, layer_id=layer_id)
-        self.layer_id = layer_id
+        self.ffn_norm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.ffn_dropout = nn.Dropout(config.hidden_dropout_prob)
+
+
+        layer_shortcut_config = config.shortcut_config[f"model_layer_{layer_id}"]
+
+        self.residual_2 = ShortcutFromIdentity(
+            in_out_features=self.embed_dim,
+            config=layer_shortcut_config["residual2"],
+        )
+        self.shortcut_sa = ShortcutFromZeros(
+            in_out_features=self.embed_dim,
+            config=layer_shortcut_config["shortcut1"],
+        )
+        # self.shortcut_ln_sa = nn.LayerNorm(
+        #     self.embed_dim, elementwise_affine=config.layer_norm_elementwise_affine
+        # )
+        # self.shortcut_ln_sa.weight.data.copy_(self.final_layer_norm.weight.data)
+        # self.shortcut_ln_sa.bias.data.copy_(self.final_layer_norm.bias.data)
+        self.shortcut_ffn = ShortcutFromZeros(
+            in_out_features=self.embed_dim,
+            config=layer_shortcut_config["shortcut2"],
+        )
+        # self.shortcut_ln_ffn = nn.LayerNorm(
+        #     self.embed_dim, elementwise_affine=config.layer_norm_elementwise_affine
+        # )
+        # self.shortcut_ln_ffn.weight.data.copy_(self.self_attn_layer_norm.weight.data)
+        # self.shortcut_ln_ffn.bias.data.copy_(self.self_attn_layer_norm.bias.data)
+        if layer_id == 0:
+            self.shortcut_ffn = None
+            # self.shortcut_ln_ffn = None
 
     def forward(
         self,
@@ -527,11 +567,15 @@ class RobertaLoraLayer(nn.Module):
         encoder_attention_mask: Optional[torch.FloatTensor] = None,
         past_key_value: Optional[Tuple[Tuple[torch.FloatTensor]]] = None,
         output_attentions: Optional[bool] = False,
+        residual_ffn: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor]:
         # decoder uni-directional self-attention cached key/values tuple is at positions 1,2
         self_attn_past_key_value = (
             past_key_value[:2] if past_key_value is not None else None
         )
+        # residual_sa for this layer
+        residual_sa = torch.clone(hidden_states)
+
         self_attention_outputs = self.attention(
             hidden_states,
             attention_mask,
@@ -540,7 +584,6 @@ class RobertaLoraLayer(nn.Module):
             past_key_value=self_attn_past_key_value,
         )
         attention_output = self_attention_outputs[0]
-
         # if decoder, the last output is tuple of self-attn cache
         if self.is_decoder:
             outputs = self_attention_outputs[1:-1]
@@ -580,19 +623,43 @@ class RobertaLoraLayer(nn.Module):
             cross_attn_present_key_value = cross_attention_outputs[-1]
             present_key_value = present_key_value + cross_attn_present_key_value
 
+
+        # cross-layer shortcut from previous FFN input
+        if residual_ffn is not None and self.shortcut_ffn is not None:
+            residual_ffn = self.shortcut_ffn(residual_ffn)
+            attention_output_ = residual_ffn + attention_output
+            # assert torch.all(hidden_states_ == hidden_states), \
+            #     f"residual_ffn: {residual_ffn}\n shortcut_ffn: {self.shortcut_ffn.weight}"
+            attention_output = self.ffn_norm(attention_output_)
+
+        # residual_ffn for next decoder layer
+        residual_ffn = torch.clone(attention_output)
+
+        residual_2 = self.residual_2(attention_output)
         layer_output = apply_chunking_to_forward(
             self.feed_forward_chunk,
             self.chunk_size_feed_forward,
             self.seq_len_dim,
             attention_output,
         )
+        layer_output = self.ffn_dropout(layer_output)
+        layer_output = self.ffn_norm(residual_2 + layer_output)
         outputs = (layer_output,) + outputs
 
         # if decoder, return the attn key/values as the last output
         if self.is_decoder:
             outputs = outputs + (present_key_value,)
 
-        return outputs
+        # cross-layer shortcut from current SA input
+        if self.shortcut_sa is not None:
+            residual_sa = self.shortcut_sa(residual_sa)
+            hidden_states_ = residual_sa + outputs[0]
+            # assert torch.all(hidden_states_ == hidden_states), \
+            #     f"residual_sa: {residual_sa}\n shortcut_sa: {self.shortcut_sa.weight} \n " \
+            #     f"proj_B: {self.shortcut_sa.proj_B[self.shortcut_sa.active_projector].weight}"
+            hidden_states = self.ffn_norm(hidden_states_)
+        outputs = (hidden_states,)
+        return outputs, residual_ffn
 
     def feed_forward_chunk(self, attention_output):
         intermediate_output = self.intermediate(attention_output)
@@ -607,7 +674,7 @@ class RobertaLoraEncoder(nn.Module):
         self.config = config
         self.layer = nn.ModuleList(
             [
-                RobertaLoraLayer(config, layer_id=i)
+                RobertaLoraAgsLayer(config, layer_id=i)
                 for i in range(config.num_hidden_layers)
             ]
         )
@@ -640,6 +707,7 @@ class RobertaLoraEncoder(nn.Module):
                 use_cache = False
 
         next_decoder_cache = () if use_cache else None
+        residual_ffn = None
         for i, layer_module in enumerate(self.layer):
             if output_hidden_states:
                 all_hidden_states = all_hidden_states + (hidden_states,)
@@ -664,7 +732,7 @@ class RobertaLoraEncoder(nn.Module):
                     encoder_attention_mask,
                 )
             else:
-                layer_outputs = layer_module(
+                layer_outputs, residual_ffn = layer_module(
                     hidden_states,
                     attention_mask,
                     layer_head_mask,
@@ -672,6 +740,7 @@ class RobertaLoraEncoder(nn.Module):
                     encoder_attention_mask,
                     past_key_value,
                     output_attentions,
+                    residual_ffn=residual_ffn
                 )
 
             hidden_states = layer_outputs[0]
@@ -728,7 +797,7 @@ class RobertaLoraPreTrainedModel(PreTrainedModel):
     models.
     """
 
-    config_class = RobertaLoraConfig
+    config_class = RobertaLoraAgsConfig
     base_model_prefix = "roberta"
     supports_gradient_checkpointing = True
     _no_split_modules = ["RobertaEmbeddings", "RobertaSelfAttention"]

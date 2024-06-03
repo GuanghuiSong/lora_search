@@ -17,11 +17,13 @@ from transformers import (
 )
 
 from models.configuration_gemma_lora import GemmaLoraConfig
+from models.configuration_llama_lora import LlamaLoraConfig
 from models.configuration_opt_lora import OPTLoraConfig
 from models.configuration_opt_lora_ags import (
     OPTLoraAgsConfig,
 )
 from models.configuration_roberta_lora import RobertaLoraConfig
+from models.configuration_roberta_lora_ags import RobertaLoraAgsConfig
 from models.modeling_gemma_lora import (
     GemmaLoraForSequenceClassification,
     GemmaLoraForCausalLM,
@@ -38,6 +40,16 @@ from models.modeling_roberta_lora import (
     RobertaLoraForSequenceClassification,
     RobertaLoraForCausalLM,
 )
+from models.modeling_roberta_lora_ags import RobertaLoraForSequenceClassification as RobertaLoraAgsForSequenceClassification
+from models.modeling_roberta_lora_ags import RobertaLoraForCausalLM as RobertaLoraAgsForCausalLM
+from models.modeling_llama_lora import (
+    LlamaForSequenceClassification,
+    LlamaForCausalLM,
+)
+# from models.modeling_llama import (
+#     LlamaForSequenceClassification,
+#     LlamaForCausalLM,
+# )
 
 
 class ModelSource(Enum):
@@ -237,6 +249,48 @@ HF_NLP_MODELS = {
 }
 
 MANUAL_MODELS = {
+    "Llama2": {
+        "config_cls": LlamaConfig,
+        "tokenizer_cls": LlamaTokenizer,
+        "info": AgsModelInfo(
+            "llama_plain",
+            model_source="manual",
+            task_type="nlp",
+            sequence_classification=True,
+            causal_LM=True,
+        ),
+        "sequence_classification": LlamaForSequenceClassification,
+        "causal_LM": LlamaForCausalLM,
+    },
+    "Llama2_lora": {
+        "config_cls": LlamaLoraConfig,
+        "tokenizer_cls": LlamaTokenizer,
+        "info": AgsModelInfo(
+            "llama2_lora",
+            model_source="manual",
+            task_type="nlp",
+            sequence_classification=True,
+            causal_LM=True,
+            is_lora=True,
+        ),
+        "sequence_classification": LlamaForSequenceClassification,
+        "causal_LM": LlamaForCausalLM,
+    },
+    # "Llama2_lora_ags": {
+    #     "config_cls": LlamaLoraAgsConfig,
+    #     "tokenizer_cls": LlamaTokenizer,
+    #     "info": AgsModelInfo(
+    #         "llama2_lora_ags",
+    #         model_source="manual",
+    #         task_type="nlp",
+    #         sequence_classification=True,
+    #         causal_LM=True,
+    #         is_lora=True,
+    #         is_ags=True,
+    #     ),
+    #     "sequence_classification": LlamaLoraAgsForSequenceClassification,
+    #     "causal_LM": LlamaLoraAgsForCausalLM,
+    # },
     "llama_plain": {
         "config_cls": LlamaConfig,
         "tokenizer_cls": LlamaTokenizer,
@@ -290,6 +344,21 @@ MANUAL_MODELS = {
         ),
         "sequence_classification": RobertaLoraForSequenceClassification,
         "causal_LM": RobertaLoraForCausalLM,
+    },
+    "roberta_lora_ags": {
+    "config_cls": RobertaLoraAgsConfig,
+    "tokenizer_cls": RobertaTokenizer,
+    "info": AgsModelInfo(
+        "roberta_lora_ags",
+        model_source="manual",
+        task_type="nlp",
+        sequence_classification=True,
+        causal_LM=True,
+        is_lora=True,
+        is_ags=True,
+    ),
+    "sequence_classification": RobertaLoraAgsForSequenceClassification,
+    "causal_LM": RobertaLoraAgsForCausalLM,
     },
     "gemma_lora": {
         "config_cls": GemmaLoraConfig,

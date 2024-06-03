@@ -1,0 +1,32 @@
+# Zero-proxy training & Alpha importance testing
+# basics
+# model = "opt_lora"
+model = "opt_lora_ags"
+dataset = "rte"
+# load_name = "facebook/opt-350m"
+load = "/home/sgh/.cache/huggingface/hub/models--facebook--opt-350m/snapshots/08ab08cc4b72ff5593870b5d527cf4230323703c"
+load_type = "hf"
+# reallocation
+importance_test_name = "grad_norm"
+imp_limit_test_batches = 32
+turn-on-percentile = 0.25
+# dyrealloc-ags-mode = "off"
+dyrealloc-ags-mode = "combined"
+# training
+training_optimizer = "adamw"
+learning_rate = 1e-4
+weight_decay = 0.01
+max_epochs = 10
+batch_size = 8
+log_every_n_steps = 20
+# torch lightning
+task = "classification"
+strategy = "ddp_find_unused_parameters_true"
+#num_workers = 0
+num_devices = 1
+#accelerator = "cpu"
+# language model options
+pretrained = true
+project_dir = "./ags_output"
+lora_config = "./configs/lora/lora_networkwise.toml"
+shortcut-config = "./configs/shortcut/ags_networkwise.toml"
