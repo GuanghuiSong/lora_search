@@ -3,7 +3,8 @@ from transformers import PreTrainedModel
 
 from dataset import AgsDatasetInfo
 from .base import PlWrapperBase
-
+from scipy.stats import pearsonr, spearmanr
+from sklearn.metrics import f1_score, matthews_corrcoef
 
 # Sentence classification
 class NLPClassificationModelWrapper(PlWrapperBase):
@@ -59,7 +60,14 @@ class NLPClassificationModelWrapper(PlWrapperBase):
                 labels=labels,
             )
         return outputs
-
+    # def pearson_and_spearman(preds, labels):
+    #     pearson_corr = pearsonr(preds, labels)[0]
+    #     spearman_corr = spearmanr(preds, labels)[0]
+    #     return {
+    #         "pearson": pearson_corr,
+    #         "spearmanr": spearman_corr,
+    #         "corr": (pearson_corr + spearman_corr) / 2,
+    #     }
     def training_step(self, batch, batch_idx):
         x = batch["input_ids"]
         attention_mask = batch["attention_mask"]
@@ -95,6 +103,10 @@ class NLPClassificationModelWrapper(PlWrapperBase):
 
         self.acc_val(pred_ids, y)
         self.f1_val(pred_ids, y)
+
+        self.matthews_corrcoef_val(pred_ids, y)
+        self.pearson_corrcoef_val(pred_ids.float(), y.float())
+        self.spearman_Corrcoef_val(pred_ids.float(), y.float())
         self.loss_val(loss)
 
         return loss
@@ -103,6 +115,11 @@ class NLPClassificationModelWrapper(PlWrapperBase):
         self.log("val_loss_epoch", self.loss_val, prog_bar=True)
         self.log("val_acc_epoch", self.acc_val, prog_bar=True)
         self.log("val_f1_epoch", self.f1_val, prog_bar=True)
+        self.log("val_f1acc_epoch", (self.f1_val.compute() + self.acc_val.compute())/2, prog_bar=True, sync_dist=True)
+        self.log("matthews_corrcoef_val", self.matthews_corrcoef_val, prog_bar=True)
+        self.log("pearson-spearman_val", (self.pearson_corrcoef_val.compute() + self.spearman_Corrcoef_val.compute())/2, prog_bar=True, sync_dist=True)
+        # self.log("pearson_corrcoef_val", self.pearson_corrcoef_val, prog_bar=True)
+        # self.log("spearman_Corrcoef_val", self.spearman_Corrcoef_val, prog_bar=True)
 
     def test_step(self, batch, batch_idx):
         x = batch["input_ids"]
