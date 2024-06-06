@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.optim.lr_scheduler import CosineAnnealingLR
-from torchmetrics import Accuracy, MeanMetric, F1Score
+from torchmetrics import Accuracy, MeanMetric, F1Score,MatthewsCorrCoef,PearsonCorrCoef,SpearmanCorrCoef
 import pytorch_lightning as pl
 from datasets import DatasetInfo
 from transformers import PreTrainedModel
@@ -45,6 +45,11 @@ class PlWrapperBase(pl.LightningModule):
             self.f1_train = F1Score(
                 "multiclass", num_classes=self.num_classes, average="macro"
             )
+            self.matthews_corrcoef = MatthewsCorrCoef("multiclass", num_classes=self.num_classes
+            )
+            self.pearson_corrcoef = PearsonCorrCoef()
+            self.spearman_Corrcoef = SpearmanCorrCoef()
+
 
         # validation metrics are logged when epoch ends
         if self.num_classes is not None:
@@ -52,6 +57,10 @@ class PlWrapperBase(pl.LightningModule):
             self.f1_val = F1Score(
                 "multiclass", num_classes=self.num_classes, average="macro"
             )
+            self.matthews_corrcoef_val = MatthewsCorrCoef("multiclass", num_classes=self.num_classes
+            )
+            self.pearson_corrcoef_val = PearsonCorrCoef()
+            self.spearman_Corrcoef_val = SpearmanCorrCoef()
         self.loss_val = MeanMetric()
 
         # test metrics are logged when epoch ends
@@ -60,13 +69,16 @@ class PlWrapperBase(pl.LightningModule):
             self.f1_test = F1Score(
                 "multiclass", num_classes=self.num_classes, average="macro"
             )
+            self.matthews_corrcoef = MatthewsCorrCoef("multiclass", num_classes=self.num_classes
+            )
+            self.pearson_corrcoef = PearsonCorrCoef()
+            self.spearman_Corrcoef = SpearmanCorrCoef()
         self.loss_test = MeanMetric()
 
         self.save_hyperparameters(ignore=["model"])
 
     def forward(self, x):
         return self.model(x)
-
     def training_step(self, batch, batch_idx):
         x, y = batch
         y_pred = self.forward(x)
@@ -82,7 +94,6 @@ class PlWrapperBase(pl.LightningModule):
         x, y = batch
         y_pred = self.forward(x)
         loss = self.loss_fn(y_pred, y)
-
         self.acc_val(y_pred, y)
         self.loss_val(loss)
         return loss
@@ -90,7 +101,6 @@ class PlWrapperBase(pl.LightningModule):
     def on_validation_epoch_end(self):
         self.log("val_acc_epoch", self.acc_val, prog_bar=True)
         self.log("val_loss_epoch", self.loss_val, prog_bar=True)
-
         # TODO: log LoRA singulars by Wandb
 
         # if "Ags" not in self.model.__class__.__name__:
