@@ -14,8 +14,8 @@ from lora.lora_modules import (
     reset_lora,
 )
 from models.model_info import AgsModelInfo
-from pl_callbacks.dyrealloc_callback import DynamicLoraReallocationCallback
-# from pl_callbacks.dyrealloc_roberta_callback import DynamicLoraReallocationCallback
+# from pl_callbacks.dyrealloc_callback import DynamicLoraReallocationCallback
+from pl_callbacks.dyrealloc_roberta_callback import DynamicLoraReallocationCallback
 from projectors.shortcut_modules import (
     update_ags_importance_beta_require_grad,
     reset_shortcut,

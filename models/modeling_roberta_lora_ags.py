@@ -385,7 +385,7 @@ class RobertaLoraSelfOutput(nn.Module):
 
 
     def forward(
-        self, hidden_states: torch.Tensor, input_tensor: torch.Tensor
+        self, hidden_states: torch.Tensor
     ) -> torch.Tensor:
         hidden_states = self.dense(hidden_states)
         return hidden_states
@@ -453,8 +453,7 @@ class RobertaLoraAttention(nn.Module):
             past_key_value,
             output_attentions,
         )
-        attention_output = self.output(self_outputs[0], hidden_states)
-
+        attention_output = self.output(self_outputs[0])
         attention_output = self.self_attn_dropout(attention_output)
         attention_output = self.self_attn_layer_norm(attention_output + residual)
         outputs = (attention_output,) + self_outputs[
@@ -499,7 +498,7 @@ class RobertaLoraOutput(nn.Module):
 
 
     def forward(
-        self, hidden_states: torch.Tensor, input_tensor: torch.Tensor
+        self, hidden_states: torch.Tensor
     ) -> torch.Tensor:
         hidden_states = self.dense(hidden_states)
         return hidden_states
@@ -635,15 +634,13 @@ class RobertaLoraAgsLayer(nn.Module):
         # residual_ffn for next decoder layer
         residual_ffn = torch.clone(attention_output)
 
-        residual_2 = self.residual_2(attention_output)
+
         layer_output = apply_chunking_to_forward(
             self.feed_forward_chunk,
             self.chunk_size_feed_forward,
             self.seq_len_dim,
             attention_output,
         )
-        layer_output = self.ffn_dropout(layer_output)
-        layer_output = self.ffn_norm(residual_2 + layer_output)
         outputs = (layer_output,) + outputs
 
         # if decoder, return the attn key/values as the last output
@@ -662,8 +659,12 @@ class RobertaLoraAgsLayer(nn.Module):
         return outputs, residual_ffn
 
     def feed_forward_chunk(self, attention_output):
+        residual_2 = self.residual_2(attention_output)
         intermediate_output = self.intermediate(attention_output)
-        layer_output = self.output(intermediate_output, attention_output)
+        layer_output = self.output(intermediate_output)
+        layer_output = self.ffn_dropout(layer_output)
+        layer_output = self.ffn_norm(residual_2 + layer_output)
+
         return layer_output
 
 
