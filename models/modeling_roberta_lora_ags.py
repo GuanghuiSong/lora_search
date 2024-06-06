@@ -382,12 +382,15 @@ class RobertaLoraSelfOutput(nn.Module):
             out_features=config.hidden_size,
             config=layer_lora_config["o_proj"],
         )
-
+        self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
     def forward(
-        self, hidden_states: torch.Tensor
+        self, hidden_states: torch.Tensor     #, input_tensor: torch.Tensor
     ) -> torch.Tensor:
         hidden_states = self.dense(hidden_states)
+        # hidden_states = self.dropout(hidden_states)
+        # hidden_states = self.LayerNorm(hidden_states + input_tensor)
         return hidden_states
 
 #res1 in here ###attn's residual
@@ -399,8 +402,8 @@ class RobertaLoraAttention(nn.Module):
             config, layer_id=layer_id, position_embedding_type=position_embedding_type
         )
         self.output = RobertaLoraSelfOutput(config, layer_id=layer_id)
-        self.self_attn_layer_norm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
-        self.self_attn_dropout = nn.Dropout(config.hidden_dropout_prob)
+        # self.self_attn_layer_norm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        # self.self_attn_dropout = nn.Dropout(config.hidden_dropout_prob)
         layer_shortcut_config = config.shortcut_config[f"model_layer_{layer_id}"]
         self.embed_dim = config.hidden_size
 
@@ -454,8 +457,8 @@ class RobertaLoraAttention(nn.Module):
             output_attentions,
         )
         attention_output = self.output(self_outputs[0])
-        attention_output = self.self_attn_dropout(attention_output)
-        attention_output = self.self_attn_layer_norm(attention_output + residual)
+        attention_output = self.output.dropout(attention_output)
+        attention_output = self.output.LayerNorm(attention_output + residual)
         outputs = (attention_output,) + self_outputs[
             1:
         ]  # add attentions if we output them
@@ -495,7 +498,8 @@ class RobertaLoraOutput(nn.Module):
             out_features=config.hidden_size,
             config=layer_lora_config["w2"],
         )
-
+        self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
     def forward(
         self, hidden_states: torch.Tensor
@@ -525,9 +529,6 @@ class RobertaLoraAgsLayer(nn.Module):
             )
         self.intermediate = RobertaLoraIntermediate(config, layer_id=layer_id)
         self.output = RobertaLoraOutput(config, layer_id=layer_id)
-        self.ffn_norm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
-        self.ffn_dropout = nn.Dropout(config.hidden_dropout_prob)
-
 
         layer_shortcut_config = config.shortcut_config[f"model_layer_{layer_id}"]
 
@@ -662,8 +663,8 @@ class RobertaLoraAgsLayer(nn.Module):
         residual_2 = self.residual_2(attention_output)
         intermediate_output = self.intermediate(attention_output)
         layer_output = self.output(intermediate_output)
-        layer_output = self.ffn_dropout(layer_output)
-        layer_output = self.ffn_norm(residual_2 + layer_output)
+        layer_output = self.output.dropout(layer_output)
+        layer_output = self.output.LayerNorm(residual_2 + layer_output)
 
         return layer_output
 
