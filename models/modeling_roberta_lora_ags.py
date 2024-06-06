@@ -568,7 +568,7 @@ class RobertaLoraAgsLayer(nn.Module):
         past_key_value: Optional[Tuple[Tuple[torch.FloatTensor]]] = None,
         output_attentions: Optional[bool] = False,
         residual_ffn: Optional[torch.Tensor] = None,
-    ) -> Tuple[torch.Tensor]:
+    ) :
         # decoder uni-directional self-attention cached key/values tuple is at positions 1,2
         self_attn_past_key_value = (
             past_key_value[:2] if past_key_value is not None else None
@@ -630,7 +630,7 @@ class RobertaLoraAgsLayer(nn.Module):
             attention_output_ = residual_ffn + attention_output
             # assert torch.all(hidden_states_ == hidden_states), \
             #     f"residual_ffn: {residual_ffn}\n shortcut_ffn: {self.shortcut_ffn.weight}"
-            attention_output = self.ffn_norm(attention_output_)
+            attention_output = self.attention.self_attn_layer_norm(attention_output_)
 
         # residual_ffn for next decoder layer
         residual_ffn = torch.clone(attention_output)
