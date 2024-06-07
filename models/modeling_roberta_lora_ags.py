@@ -577,13 +577,13 @@ class RobertaLoraAgsLayer(nn.Module):
         residual_sa = torch.clone(hidden_states)
 
         self_attention_outputs = self.attention(
-            hidden_states,
+            hidden_states,     #0.1664, -0.0541, -0.0014
             attention_mask,
             head_mask,
             output_attentions=output_attentions,
             past_key_value=self_attn_past_key_value,
         )
-        attention_output = self_attention_outputs[0]
+        attention_output = self_attention_outputs[0]   #3.5571e-01,  2.8917e-02,  4.6127e-01,  ..., -2.4925e-03
         # if decoder, the last output is tuple of self-attn cache
         if self.is_decoder:
             outputs = self_attention_outputs[1:-1]
@@ -627,10 +627,10 @@ class RobertaLoraAgsLayer(nn.Module):
         # cross-layer shortcut from previous FFN input
         if residual_ffn is not None and self.shortcut_ffn is not None:
             residual_ffn = self.shortcut_ffn(residual_ffn)
-            attention_output_ = residual_ffn + attention_output
+            attention_output = residual_ffn + attention_output
             # assert torch.all(hidden_states_ == hidden_states), \
             #     f"residual_ffn: {residual_ffn}\n shortcut_ffn: {self.shortcut_ffn.weight}"
-            attention_output = self.attention.self_attn_layer_norm(attention_output_)
+            # attention_output = self.attention.output.LayerNorm(attention_output)
 
         # residual_ffn for next decoder layer
         residual_ffn = torch.clone(attention_output)
@@ -640,9 +640,9 @@ class RobertaLoraAgsLayer(nn.Module):
             self.feed_forward_chunk,
             self.chunk_size_feed_forward,
             self.seq_len_dim,
-            attention_output,
+            attention_output,   #3.5571e-01,  2.8917e-02,  4.6127e-01,  ..., -2.4925e-03
         )
-        outputs = (layer_output,) + outputs
+        outputs = (layer_output,) + outputs  #9.9540e-04,  2.0180e-02,  3.0077e-02,  ..., -1.2924e-02
 
         # if decoder, return the attn key/values as the last output
         if self.is_decoder:
@@ -651,12 +651,12 @@ class RobertaLoraAgsLayer(nn.Module):
         # cross-layer shortcut from current SA input
         if self.shortcut_sa is not None:
             residual_sa = self.shortcut_sa(residual_sa)
-            hidden_states_ = residual_sa + outputs[0]
+            hidden_states = residual_sa + outputs[0]
             # assert torch.all(hidden_states_ == hidden_states), \
             #     f"residual_sa: {residual_sa}\n shortcut_sa: {self.shortcut_sa.weight} \n " \
             #     f"proj_B: {self.shortcut_sa.proj_B[self.shortcut_sa.active_projector].weight}"
-            hidden_states = self.ffn_norm(hidden_states_)
-        outputs = (hidden_states,)
+            # hidden_states = self.output.LayerNorm(hidden_states)
+        outputs = (hidden_states,)   #-6.9117e-02,  8.8913e-02, -8.7797e-03,  ..., -1.7900e-02
         return outputs, residual_ffn
 
     def feed_forward_chunk(self, attention_output):
@@ -735,7 +735,7 @@ class RobertaLoraEncoder(nn.Module):
                 )
             else:
                 layer_outputs, residual_ffn = layer_module(
-                    hidden_states,
+                    hidden_states,   #1664，-0541，-0014
                     attention_mask,
                     layer_head_mask,
                     encoder_hidden_states,
