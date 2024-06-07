@@ -223,7 +223,7 @@ def train_dynamic_reallocation(
         if len(trainable_params) > 0:
             for name, param in model.named_parameters():
                 # print(name)
-                if name.startswith("model") or name.startswith("roberta"):
+                if name.startswith("model") or name.startswith("roberta") or name.startswith("classifier"):
                     param.requires_grad = False
                     for trainable_param in trainable_params:
                         if trainable_param in name:

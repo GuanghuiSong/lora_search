@@ -1,0 +1,38 @@
+granularity = "network"
+
+[default]
+r = 4
+shortcut_alpha = 8
+proj_dropout = 0.0
+projector_name = "ags-network-opt"
+init_lora_weghts = true
+fan_in_fan_out = false
+disable_projector = false
+
+[all_layers.residual1]
+r = 4
+shortcut_alpha = 8
+proj_dropout = 0.0
+projector_name = "ags-network-opt"
+disable_projector = false
+
+[all_layers.residual2]
+r = 4
+shortcut_alpha = 8
+proj_dropout = 0.0
+projector_name = "ags-network-opt"
+disable_projector = false
+
+[all_layers.shortcut1]
+r = 4
+shortcut_alpha = 8
+proj_dropout = 0.0
+projector_name = "ags-network-opt"
+disable_projector = false
+
+[all_layers.shortcut2]
+r = 4
+shortcut_alpha = 8
+proj_dropout = 0.0
+projector_name = "ags-network-opt"
+disable_projector = false
